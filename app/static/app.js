@@ -436,8 +436,8 @@ function dashboardPage() {
       h("section", { class: pending.length ? "decision" : "decision calm" },
         h("h2", null, pending.length === 1 ? "Needs a person" : pending.length ? `${pending.length} need a person` : "Nothing is waiting for a person"),
         ...pending.map((item) => h("a", { href: "#/response" },
-          h("strong", null, prettyAction(item.action)),
-          h("span", null, `${item.resource}  ·  ${overviewPhrase(item.status)}`)
+          h("strong", null, prettyAction(item.action).replace(/\b\w/g, c => c.toUpperCase())),
+          h("span", null, `${item.resource.replace(/^process:/i, "Process: ").replace(/\b\w/g, c => c.toUpperCase())}  ·  ${overviewPhrase(item.status).replace(/\b\w/g, c => c.toUpperCase())}`)
         ))
       )
     )
@@ -688,7 +688,7 @@ function verificationPage() {
     h("h1", null, "What was actually observed"),
     h("p", { class: "lede" }, "A completed request is not a resolved incident. These outcomes come from an independent read of the simulated world."),
     items.length ? items.map((item) => h("article", { class: "item" },
-      h("h2", null, prettyAction(item.action)),
+      h("h2", null, prettyAction(item.action).replace(/\b\w/g, c => c.toUpperCase())),
       h("p", { class: "mono" }, `${item.id} · ${item.incidentTitle}`),
       h("p", null, `Attempted state ${item.status}. Verification ${item.verification_result || "not confirmed"}.`),
       verificationBlock(item),
@@ -717,7 +717,7 @@ function actionsPage() {
     h("p", { class: "muted" }, "The decision is recorded as a local dashboard decision unless Switch is actually connected."),
     items.length ? items.map((item) => h("article", { class: "action" },
       h("div", null,
-        h("h2", null, `${prettyAction(item.action)}`),
+        h("h2", null, `${prettyAction(item.action).replace(/\b\w/g, c => c.toUpperCase())}`),
         h("p", null, item.justification),
         h("p", { class: "mono" }, `${item.id} · ${item.incident_id} · ${item.incidentTitle}`),
         h("div", { class: "meta-line" },
