@@ -51,7 +51,7 @@ High-risk actions are subject to approval controls. A successful execution respo
 ### Requirements
 
 - Python 3.13+
-- Windows, macOS, or Linux
+- Windows (tested environment)
 
 ### Setup
 
@@ -143,18 +143,18 @@ The integration supports:
 - Agent registration with Switch Core.
 - WebSocket-based connection and event handling.
 - Outbound message delivery.
-- Processing inbound messages and responding to pings.
+- Inbound message handling.
 - Automated-agent loop protection.
 - Sender validation and platform-message filtering.
 - Connection health reporting.
 
-The Switch adapter includes safeguards against automated message loops, platform-generated pings, and unidentified senders. These safeguards are covered by mocked integration tests.
+The Switch adapter includes safeguards against automated message loops, platform-generated pings, and unidentified senders.
 
-The integration also includes a mock Switch server for testing registration, authentication, messaging, and connection behaviour.
+A mock Switch server is also included for testing registration, authentication, messaging, and connection behaviour.
 
 Registration credentials are supplied through local environment configuration and are not stored in the repository.
 
-**Integration status:** Registration, outbound delivery, and inbound response behaviour have been verified against a live Switch instance. The latest P1 safeguards have passed automated tests; live verification requires restarting the running application. Agent addressing also depends on the permissions configured in Switch Console.
+**Integration status:** Agent registration, live connectivity, and outbound message delivery have been verified against a live Switch Core instance. A live outbound message round-trip has also been confirmed. Human-to-agent addressing remains subject to Switch room membership and recipient policies and has not yet been verified end-to-end.
 
 ## Tests
 
