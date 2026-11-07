@@ -1,0 +1,31 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# SQLite runtime files
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# Local backups
+frontend_backup_*/
+incident_addition_backup/
+
+# Python test/cache files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary source backups
+*.bak
+*.backup_*
+*.before*

@@ -1,0 +1,10 @@
+# VOIDTRACE Python Dependencies
+# Stage 1: Minimal Real Switch Integration Proof & Backend Foundation
+# Note: In the local environment, these packages are also available via the bundled toolchain.
+
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+httpx==0.28.1
+websockets==16.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
