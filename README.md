@@ -136,13 +136,25 @@ The scenario also tests how the platform handles misleading claims, untrusted in
 
 ## Switch Integration
 
-VOIDTRACE supports integration with a local Switch Core instance.
+VOIDTRACE integrates with a local Switch Core instance for agent communication.
 
-The registration token can be supplied through the local `.env` configuration. The actual token belongs in the local environment and should never be committed to the repository.
+The integration supports:
 
-The repository includes a mock Switch server for integration testing.
+- Agent registration with Switch Core.
+- WebSocket-based connection and event handling.
+- Outbound message delivery.
+- Processing inbound messages and responding to pings.
+- Automated-agent loop protection.
+- Sender validation and platform-message filtering.
+- Connection health reporting.
 
-A successful outbound connection is not treated as proof that inbound messaging and agent permissions are working. Those behaviours require their own checks.
+The Switch adapter includes safeguards against automated message loops, platform-generated pings, and unidentified senders. These safeguards are covered by mocked integration tests.
+
+The integration also includes a mock Switch server for testing registration, authentication, messaging, and connection behaviour.
+
+Registration credentials are supplied through local environment configuration and are not stored in the repository.
+
+**Integration status:** Registration, outbound delivery, and inbound response behaviour have been verified against a live Switch instance. The latest P1 safeguards have passed automated tests; live verification requires restarting the running application. Agent addressing also depends on the permissions configured in Switch Console.
 
 ## Tests
 
