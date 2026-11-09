@@ -348,20 +348,26 @@ class SwitchAdapter:
             return event_id
 
     def is_ping_request(self, body: str) -> bool:
-        """Return True only when the message is exactly the @voidtrace ping command.
+        """Return True only when the message is exactly the configured ping command.
 
-        Accepted forms (case-insensitive, surrounding whitespace ignored):
-          @voidtrace ping
-          /voidtrace ping
-          !voidtrace ping
-          voidtrace ping
+        The mention is taken from ``settings.AGENT_NAME`` so each deployment
+        answers its own name (for example ``voidtrace`` or
+        ``voidtrace-render``). Accepted forms (case-insensitive, surrounding
+        whitespace ignored):
+          @<agent name> ping
+          /<agent name> ping
+          !<agent name> ping
+          <agent name> ping
 
-        Bare "ping" without any voidtrace mention is NOT accepted to avoid
+        Bare "ping" without any agent mention is NOT accepted to avoid
         false positives from general conversation.
         """
         cleaned = body.strip().lower()
+        name = (settings.AGENT_NAME or "").strip().lower()
+        if not name:
+            return False
         # Strip recognised mention prefixes then check for the bare word "ping"
-        for prefix in ("@voidtrace ", "/voidtrace ", "!voidtrace ", "voidtrace "):
+        for prefix in (f"@{name} ", f"/{name} ", f"!{name} ", f"{name} "):
             if cleaned.startswith(prefix):
                 remainder = cleaned[len(prefix):].strip()
                 return remainder == "ping"

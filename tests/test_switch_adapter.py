@@ -85,6 +85,45 @@ class TestPingRecognition(unittest.TestCase):
                 )
 
 
+class TestPingRecognitionConfiguredName(unittest.TestCase):
+    """is_ping_request() must follow settings.AGENT_NAME."""
+
+    def setUp(self) -> None:
+        self.adapter = SwitchAdapter()
+        self._original_name = settings.AGENT_NAME
+
+    def tearDown(self) -> None:
+        settings.AGENT_NAME = self._original_name
+
+    def test_local_voidtrace_name(self) -> None:
+        settings.AGENT_NAME = "voidtrace"
+        valid = [
+            "@voidtrace ping",
+            "/voidtrace ping",
+            "!voidtrace ping",
+            "voidtrace ping",
+            "@VOIDTRACE PING",
+        ]
+        for text in valid:
+            with self.subTest(text=text):
+                self.assertTrue(self.adapter.is_ping_request(text))
+        self.assertFalse(self.adapter.is_ping_request("@voidtrace-render ping"))
+
+    def test_render_voidtrace_name(self) -> None:
+        settings.AGENT_NAME = "voidtrace-render"
+        valid = [
+            "@voidtrace-render ping",
+            "/voidtrace-render ping",
+            "!voidtrace-render ping",
+            "voidtrace-render ping",
+            "@VOIDTRACE-RENDER PING",
+        ]
+        for text in valid:
+            with self.subTest(text=text):
+                self.assertTrue(self.adapter.is_ping_request(text))
+        self.assertFalse(self.adapter.is_ping_request("@voidtrace ping"))
+
+
 class TestEventValidation(unittest.TestCase):
     """Valid event types and mandatory fields must be enforced synchronously."""
 

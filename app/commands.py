@@ -8,11 +8,23 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-_MENTION = re.compile(r"^\s*(?:@|/|!)?voidtrace\b[\s,:!-]*(.*)$", re.I | re.S)
+from app.config import settings
 
 
-def parse_operator_command(body: str) -> Optional[dict[str, Any]]:
-    """Return a command dict when the message is addressed to VOIDTRACE.
+def _mention_pattern(agent_name: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^\s*(?:@|/|!)?{re.escape(agent_name)}\b[\s,:!-]*(.*)$",
+        re.I | re.S,
+    )
+
+
+def parse_operator_command(
+    body: str, *, agent_name: str | None = None
+) -> Optional[dict[str, Any]]:
+    """Return a command dict when the message is addressed to the agent.
+
+    The mention is taken from ``settings.AGENT_NAME`` unless ``agent_name``
+    is given, so each deployment answers its own name.
 
     Accepted commands, after the mention:
       ping
@@ -25,7 +37,11 @@ def parse_operator_command(body: str) -> Optional[dict[str, Any]]:
     """
     if not body or not isinstance(body, str):
         return None
-    match = _MENTION.match(body.strip())
+    resolved = agent_name if agent_name is not None else settings.AGENT_NAME
+    name = (resolved or "").strip()
+    if not name:
+        return None
+    match = _mention_pattern(name).match(body.strip())
     if not match:
         return None
     rest = match.group(1).strip()
