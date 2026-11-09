@@ -277,6 +277,8 @@ class SwitchAdapter:
             "Authorization": f"Bearer {registration_token}",
             "Content-Type": "application/json",
         }
+        if settings.SWITCH_RELAY_SECRET:
+            headers["X-Voidtrace-Relay-Secret"] = settings.SWITCH_RELAY_SECRET
 
         async with self._open_client() as client:
             resp = await client.post(f"{self.server_url}/agents", json=payload, headers=headers)
@@ -307,6 +309,8 @@ class SwitchAdapter:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        if settings.SWITCH_RELAY_SECRET:
+            headers["X-Voidtrace-Relay-Secret"] = settings.SWITCH_RELAY_SECRET
         payload = {
             "room_id": room_id,
             "content": content,
@@ -517,6 +521,8 @@ class SwitchAdapter:
                 )
                 full_ws_url = f"{ws_path}{params}"
                 headers = {"Authorization": f"Bearer {self.api_key}"}
+                if settings.SWITCH_RELAY_SECRET:
+                    headers["X-Voidtrace-Relay-Secret"] = settings.SWITCH_RELAY_SECRET
 
                 logger.info(
                     "Opening WebSocket connection to Switch Core: %s",

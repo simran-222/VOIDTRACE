@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Switch Core REST API runs on port 53450
     SWITCH_SERVER_URL: str = "http://127.0.0.1:53450"
     SWITCH_WS_URL: str = "ws://127.0.0.1:53450"
+    SWITCH_RELAY_SECRET: str = ""
 
     # Bootstrap Registration Token.
     # Must be set in the environment (or .env) before registration is attempted.
