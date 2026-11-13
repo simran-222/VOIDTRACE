@@ -1,182 +1,267 @@
 # VOIDTRACE
 
-**Trust nothing. Verify everything.**
+### Trust nothing. Verify everything.
 
-VOIDTRACE is a defensive security incident investigation and response platform that turns untrusted reports and fragmented telemetry into evidence-backed decisions, controlled response simulations, and independently verified outcomes.
+VOIDTRACE is a defensive AI-powered security incident investigation and response platform.
 
-It is designed around one principle: **a security decision should never be more certain than the evidence behind it.**
+VOIDTRACE is built on the idea: **Security decisions should be based on evidence, actions should require permission, and success should be independently verified.**
 
-## Overview
+A security tool shouldn't simply detect something suspicious, execute an action and declare everything fixed. It should explain what happened, show the evidence behind its decision, check whether an action is permitted, require approval and verify the result afterward.
 
-Security incidents rarely arrive with a complete picture. Reports can be misleading, telemetry can conflict, and seemingly straightforward response actions can affect critical services.
 
-VOIDTRACE brings investigation, policy enforcement, response simulation, and verification into one workflow.
+## What VOIDTRACE does
 
-The platform operates on local simulated environments. It does not execute remediation against production infrastructure.
+VOIDTRACE brings the incident investigation and response workflow into one platform.
 
-## Key Capabilities
+- Investigates security incidents and collects supporting evidence.
+- Correlates evidence and generates findings to explain suspicious activity.
+- Evaluates response actions against a defined security policy.
+- Requires approval before authorised response actions can execute.
+- Uses controlled, single-use capabilities for approved actions.
+- Independently verifies the resulting state instead of trusting an executor's success message.
+- Maintains an audit trail so decisions and actions can be reviewed.
+- Integrates with Switch for agent communication and operator interaction.
 
-- **Evidence-based investigation** — Correlates available telemetry and links conclusions to supporting evidence.
-- **Uncertainty handling** — Missing, conflicting, or uncorroborated information is not treated as confirmed fact.
-- **Untrusted input handling** — Instructions embedded in incident reports, logs, and telemetry are treated as data, not commands.
-- **Policy-controlled responses** — The internal SECURITY layer evaluates permissions before simulated tools or response actions can be accessed.
-- **Approval controls** — High-risk actions require approval rather than being automatically executed.
-- **Response simulation** — Proposed actions are tested in a local simulation instead of being applied to production systems.
-- **Independent verification** — A separate verification step checks the resulting simulated state.
-- **Tamper-evident audit trail** — Audit records are linked using a SHA-256 hash chain.
+## How it works
 
-## How It Works
+The workflow follows a simple principle: investigate first, authorise second, execute only when permitted, and verify afterward.
 
-A typical incident moves through the following stages:
+1. **Incident intake** — An incident enters the investigation workflow.
+2. **Evidence collection** — Relevant evidence is collected and associated with the incident.
+3. **Investigation** — Findings are generated from available evidence.
+4. **Threat assessment** — The incident is evaluated using investigation results.
+5. **Policy evaluation** — The requested response is checked against the security policy.
+6. **Human approval** — An authorised operator must approve the action.
+7. **Capability issuance** — A time-limited, single-use capability is issued for the approved action.
+8. **Response execution** — Only an allowed and approved action can proceed.
+9. **Independent verification** — VOIDTRACE checks the resulting state separately and records the outcome.
 
-1. **Report intake** — An incident report is received and its claims are treated as unverified.
-2. **Investigation** — Available telemetry is examined and relevant evidence is collected.
-3. **Assessment** — Findings, confidence, risk, and business impact are evaluated.
-4. **Policy evaluation** — SECURITY checks whether the requested operations are permitted.
-5. **Approval** — Actions requiring human authorization remain pending until approval is provided.
-6. **Simulation** — Permitted response actions are executed in the local simulation.
-7. **Verification** — The resulting state is checked independently of the execution result.
-8. **Audit** — Decisions, evidence, approvals, and outcomes are recorded.
+The important part is that a successful execution response is not automatically treated as proof of remediation.
 
-## SECURITY
+## Security and policy enforcement
 
-SECURITY is VOIDTRACE's internal policy enforcement layer, not a separate product.
+Security controls are a central part of VOIDTRACE, not something added at the end.
 
-It controls access to simulated operations through permission checks and policy rules. When a policy check fails or its integrity cannot be established, access is denied.
+### Security policy
 
-High-risk actions are subject to approval controls. A successful execution response alone is not considered proof that an action achieved its intended result.
+VOIDTRACE uses an explicit eight-tool allowlist:
 
-## Running Locally
+- Four read-only tools.
+- Three mutation tools.
+- One dedicated verification tool: `verify.read_state`.
+
+This separates investigation, response and verification permissions.
+
+### Policy integrity
+
+The policy is protected using a SHA-256 fingerprint.
+
+If the policy is modified unexpectedly, VOIDTRACE fails closed and records a `SECURITY_TAMPER_DETECTED` event rather than silently continuing with a changed policy.
+
+### Human approval and capabilities
+
+Response actions require matching, unexpired human approval.
+
+Approved actions use a single-use capability. The capability is time-limited, and its hash is stored rather than relying on a reusable approval alone.
+
+### API authentication
+
+The deployed application includes Bearer-token authentication for mutating API requests.
+
+- `VOIDTRACE_API_TOKEN` configures the API token.
+- `VOIDTRACE_ALLOW_INSECURE_LOCAL_MUTATIONS` controls the explicit local-development exception.
+- Public deployments should keep insecure local mutations disabled.
+- Read-only dashboard and health requests remain accessible without the mutation token.
+
+The dashboard stores the entered API token in browser session storage and attaches it to authorised mutation requests.
+
+## Independent verification
+
+Verification is one of the most important parts of VOIDTRACE.
+
+The response executor does not get to decide whether its own action succeeded.
+
+Instead, the verifier reads the resulting state separately and compares it with the expected state.
+
+The verification result is recorded so that an operator can distinguish between:
+
+- An action that was requested.
+- An action that was authorised.
+- An action that was executed.
+- An action whose expected result was actually verified.
+
+The demonstration environment uses simulated operations backed by SQLite.
+
+## Audit trail and evidence integrity
+
+VOIDTRACE records investigation and response activity so that decisions can be reviewed afterward.
+
+The audit ledger uses a SHA-256 hash chain with a fixed genesis entry. Evidence records also have their own hashes.
+
+This makes unexpected changes to recorded audit history detectable through integrity verification.
+
+The application includes an audit verification endpoint:
+
+`/api/audit/verify`
+
+The goal is to make security decisions traceable rather than leaving operators with unexplained results.
+
+## Switch integration
+
+Switch is also integrated with VOIDTRACE so that the platform can communicate through an agent-based interface.
+
+The integration includes:
+
+- Switch agent registration.
+- WebSocket connectivity.
+- Relay-based communication between the hosted application and Switch.
+- Configured agent-name handling.
+- Operator addressing and message handling.
+- Ping and status responses.
+
+The integration completed a successful live message round-trip in Switch Town Square.
+
+**Tested interaction:**
+
+`@voidtrace-render ping`
+
+**Response:**
+
+`VOIDTRACE ONLINE — Switch connection verified. Backend healthy. SQLite connected.`
+
+The successful round-trip was also reflected in the Switch status:
+
+- Received: 1
+- Sent: 1
+- Live connection proven
+
+This confirmed that the configured agent could receive and respond to an operator message through the integration.
+
+## Dashboard
+
+VOIDTRACE includes a web dashboard with the following sections:
+
+| Section | Purpose |
+|---|---|
+| Overview | View platform and incident status |
+| Incidents | Review and investigate security incidents |
+| Evidence | Examine collected evidence |
+| Response | Review and manage response actions |
+| Verification | Check whether expected outcomes were achieved |
+| Switch | View and interact with the Switch integration |
+| Trust | Review trust and integrity information |
+| Settings | Configure application-level settings |
+
+## Technology
+
+- **Backend:** Python, FastAPI
+- **Frontend:** HTML, CSS and JavaScript
+- **Database:** SQLite
+- **Security:** SHA-256 integrity checks, policy enforcement, approval and capability controls, Bearer-token API authentication
+- **Communication:** Switch, WebSockets and relay integration
+- **Hosting:** Render
+- **Testing:** Python automated test suite
+
+## Run locally
 
 ### Requirements
 
-- Python 3.13+
-- Windows (tested environment)
+- Python 3.13
+- Git
 
-### Setup
+### 1. Clone the repository
 
-Clone the repository and open the project directory:
-
-```powershell
+```bash
 git clone https://github.com/simran-222/VOIDTRACE.git
 cd VOIDTRACE
 ```
 
-Create and activate a virtual environment:
+### 2. Create a virtual environment
+
+```bash
+py -3.13 -m venv .venv
+```
+
+Activate it on Windows:
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install dependencies:
+### 3. Install dependencies
 
-```powershell
-python -m pip install -r requirements.txt
+```bash
+pip install -r requirements.txt
 ```
 
-Start the application:
+### 4. Configure environment variables
+
+Copy the example environment file:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Copy-Item .env.example .env
 ```
 
-Open `http://127.0.0.1:8000` in a browser.
+Configure the required values in `.env` for your environment.
 
-## Dashboard
+### 5. Start the application
 
-The dashboard brings the main parts of the investigation workflow together:
+```bash
+uvicorn app.main:app --reload
+```
 
-- **Overview** — Incident summary and system status.
-- **Incidents** — Incident reports and investigation results.
-- **Evidence** — Collected telemetry and supporting evidence.
-- **Response** — Proposed actions and approval status.
-- **Verification** — Independent checks of simulated outcomes.
-- **Switch** — Switch integration status and connectivity.
-- **Trust** — Audit history and integrity checks.
-- **Settings** — Application configuration.
+Open:
 
-## Demo
+`http://127.0.0.1:8000`
 
-A standalone demo can be started with:
+## Testing
+
+Run the automated test suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.demo
+python run_tests.py
 ```
 
-The demo uses a separate database at:
+The test suite covers areas including:
+
+- API authentication.
+- Protected mutation endpoints.
+- Security policy enforcement.
+- Approval and capability handling.
+- Switch message and command handling.
+- Incident and response workflows.
+- Verification and audit integrity.
+
+**Latest test result:**
 
 ```text
-demo_data/voidtrace_demo.db
+Ran 74 tests
+OK
+
+Tests Run: 74
+Errors: 0
+Failures: 0
 ```
 
-It does not use or overwrite the default `voidtrace.db` database.
+The 74-test suite passed after the API authentication and Switch status changes.
 
-The demo includes an approval workflow and a simulated response scenario.
+## Deployment
 
-## Example Investigation: Operation ShadowCredential
+VOIDTRACE is deployed as a Python web service on Render.
 
-Operation ShadowCredential demonstrates how VOIDTRACE handles a suspicious credential-access incident.
+The deployed application includes:
 
-The scenario involves:
+- A working hosted dashboard.
+- SQLite demonstration data.
+- API authentication for mutation requests.
+- Protected response and modification endpoints.
+- Switch integration support.
 
-- **Host:** `pay-worker-04`
-- **Credential:** `cred-shadow-7f3a`
-- **Service:** `payments-api`
-- **Principal:** `svc-payments-reader`
-- **Process:** `credharvest.exe`
+The latest deployment uses commit `ef8d7ef` from the GitHub `main` branch.
 
-The available telemetry includes an IAM read event, unsigned process telemetry referencing the credential, and an `iam.GetSecret` operation.
+The live dashboard and incident list were checked successfully after deployment.
 
-The investigation evaluates the evidence, identifies the risk, and considers the impact of possible response actions.
+The API token is configured through Render environment variables and must never be committed to the repository.
 
-The recommended response focuses on disabling the affected credential and terminating the suspicious process. Isolating the entire host is avoided because of its potential impact on the payment service.
-
-The scenario also tests how the platform handles misleading claims, untrusted instructions embedded in logs, and unrelated reports that cannot be corroborated.
-
-## Switch Integration
-
-VOIDTRACE integrates with a local Switch Core instance for agent communication.
-
-The integration supports:
-
-- Agent registration with Switch Core.
-- WebSocket-based connection and event handling.
-- Outbound message delivery.
-- Inbound message handling.
-- Automated-agent loop protection.
-- Sender validation and platform-message filtering.
-- Connection health reporting.
-
-The Switch adapter includes safeguards against automated message loops, platform-generated pings, and unidentified senders.
-
-A mock Switch server is also included for testing registration, authentication, messaging, and connection behaviour.
-
-Registration credentials are supplied through local environment configuration and are not stored in the repository.
-
-**Integration status:** Agent registration, live connectivity, and outbound message delivery have been verified against a live Switch Core instance. A live outbound message round-trip has also been confirmed. Human-to-agent addressing remains subject to Switch room membership and recipient policies and has not yet been verified end-to-end.
-
-## Tests
-
-Run the test suite with:
-
-```powershell
-.\.venv\Scripts\python.exe run_tests.py
-```
-
-The tests cover investigation workflows, policy controls, database integrity, application health, and Switch adapter behaviour.
-
-## Core Principles
-
-- Evidence before conclusions.
-- Uncertainty instead of unsupported assumptions.
-- Untrusted input never becomes an instruction.
-- Policy checks before access or action.
-- Human approval for high-risk operations.
-- Simulation before real-world remediation.
-- Independent verification after execution.
-- Audit records designed to reveal tampering.
-
----
 
 **VOIDTRACE — Trust nothing. Verify everything.**
