@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,16 @@ class Settings(BaseSettings):
             "AGENT_REGISTRATION_TOKEN",
         ),
     )
+
+    # Dashboard/API Authentication.
+    # Required as a Bearer token for every mutating HTTP method
+    # (POST, PUT, PATCH, DELETE). If unset, mutations fail closed.
+    VOIDTRACE_API_TOKEN: SecretStr = SecretStr("")
+
+    # Explicit local-development opt-in. When the API token is unset, this
+    # permits unauthenticated mutations only from loopback clients. Never
+    # enable this on a public or proxied deployment.
+    VOIDTRACE_ALLOW_INSECURE_LOCAL_MUTATIONS: bool = False
 
     # Switch Agent Identity
     AGENT_NAME: str = "voidtrace"

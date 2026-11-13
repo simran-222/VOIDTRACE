@@ -90,8 +90,8 @@ class SwitchAdapter:
         self.last_error: Optional[str] = None
         self.messages_received: int = 0
         self.messages_sent: int = 0
-        # True only after this process completes register + a successful message post.
-        self.round_trip_completed: bool = False
+        self.last_outbound_at: Optional[str] = None
+        self.last_inbound_at: Optional[str] = None
 
         self._client_factory: Optional[Callable[[], Any]] = None
         self._running: bool = False
@@ -343,7 +343,7 @@ class SwitchAdapter:
             finally:
                 conn.close()
 
-            self.round_trip_completed = True
+            self.last_outbound_at = datetime.now(UTC).isoformat()
             logger.info("Message sent to Switch room %s: event_id=%s", room_id, event_id)
             return event_id
 
@@ -407,8 +407,6 @@ class SwitchAdapter:
         if event_type != "message":
             return
 
-        self.messages_received += 1
-
         body = payload.get("body", "")
         sender_name = payload.get("sender_name", "Unknown")
         sender = payload.get("sender", "")
@@ -434,6 +432,10 @@ class SwitchAdapter:
                 logger.debug("Ignoring duplicate message id: %r", message_id)
                 return
             self._remember_processed_message(message_id)
+
+        if resolved_kind in {"user", "agent"}:
+            self.messages_received += 1
+            self.last_inbound_at = datetime.now(UTC).isoformat()
 
         logger.info("Message in room %s from %s: %s", room_id, sender_name, body)
 

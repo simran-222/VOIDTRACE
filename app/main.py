@@ -6,11 +6,15 @@ SECURITY gates simulated tools. VOIDTRACE cites evidence. Switch state is report
 
 from __future__ import annotations
 
+import hmac
 import logging
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
+from ipaddress import ip_address
 from typing import Any, AsyncGenerator, Literal, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -28,7 +32,7 @@ from app.demo import run_shadow_scenario
 from app.errors import SecurityBypassError, SecurityDenied, WorkflowError
 from app.security import security
 from app.performance import get_memory_metrics, recent_timings
-from app.switch_adapter import STAGE_1_VERIFICATION_RESPONSE, SwitchAdapter
+from app.switch_adapter import SwitchAdapter
 from app.workflow import (
     create_incident_record,
     decide,
@@ -52,6 +56,7 @@ logger = logging.getLogger("voidtrace")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 switch_adapter = SwitchAdapter()
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 async def _send_to_switch(room_id: str, content: str) -> str:
@@ -60,6 +65,35 @@ async def _send_to_switch(room_id: str, content: str) -> str:
 
 def _switch_is_live() -> bool:
     return switch_adapter.status == "CONNECTED" and bool(switch_adapter.agent_id and switch_adapter.api_key)
+
+
+def _configured_api_token() -> str:
+    token = settings.VOIDTRACE_API_TOKEN
+    if hasattr(token, "get_secret_value"):
+        return token.get_secret_value()
+    return str(token or "")
+
+
+def _bearer_token(request: Request) -> Optional[str]:
+    parts = request.headers.get("authorization", "").split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1] or None
+
+
+def _is_loopback_request(request: Request) -> bool:
+    client = request.client
+    if client is None:
+        return False
+    host = client.host
+    try:
+        address = ip_address(host)
+    except ValueError:
+        return host.lower() == "localhost"
+    if address.is_loopback:
+        return True
+    mapped = getattr(address, "ipv4_mapped", None)
+    return bool(mapped and mapped.is_loopback)
 
 
 async def _on_switch_event(event: dict[str, Any]) -> None:
@@ -112,6 +146,34 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def require_api_token(request: Request, call_next: Any) -> Any:
+    """Require a Bearer token for every mutating HTTP method."""
+    if request.method.upper() not in _MUTATING_METHODS:
+        return await call_next(request)
+
+    configured = _configured_api_token()
+    if configured:
+        presented = _bearer_token(request)
+        if presented is None or not hmac.compare_digest(
+            presented.encode("utf-8"), configured.encode("utf-8")
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Missing or invalid bearer token."},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return await call_next(request)
+
+    if settings.VOIDTRACE_ALLOW_INSECURE_LOCAL_MUTATIONS and _is_loopback_request(request):
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": "Mutating API is disabled until VOIDTRACE_API_TOKEN is configured."},
+    )
+
+
 @app.exception_handler(WorkflowError)
 async def handle_workflow_error(_request: Any, exc: WorkflowError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, "code": exc.code})
@@ -143,9 +205,25 @@ def build_health() -> dict[str, Any]:
     evidence_ok, evidence_msg = verify_evidence_integrity()
     perf = get_memory_metrics()
     live = _switch_is_live()
-    proven = live and switch_adapter.round_trip_completed
+    connected_at = switch_adapter.last_connected_at
+
+    def proof_current(timestamp: Optional[str]) -> bool:
+        if not (live and connected_at and timestamp):
+            return False
+        try:
+            return datetime.fromisoformat(timestamp) >= datetime.fromisoformat(connected_at)
+        except ValueError:
+            return False
+
+    outbound_verified = proof_current(switch_adapter.last_outbound_at)
+    inbound_verified = proof_current(switch_adapter.last_inbound_at)
+    proven = outbound_verified and inbound_verified
     if proven:
         claim = "live_switch_round_trip"
+    elif outbound_verified:
+        claim = "live_switch_outbound"
+    elif inbound_verified:
+        claim = "live_switch_inbound"
     elif live:
         claim = "live_switch_connected"
     else:
@@ -163,6 +241,10 @@ def build_health() -> dict[str, Any]:
             "last_connected_at": switch_adapter.last_connected_at,
             "messages_received": switch_adapter.messages_received,
             "messages_sent": switch_adapter.messages_sent,
+            "last_outbound_at": switch_adapter.last_outbound_at,
+            "last_inbound_at": switch_adapter.last_inbound_at,
+            "outbound_verified": outbound_verified,
+            "inbound_verified": inbound_verified,
             "last_error": switch_adapter.last_error,
             "registration_token_configured": bool(settings.SWITCH_REGISTRATION_TOKEN),
             "connection_claim": claim,
@@ -197,9 +279,13 @@ def build_health() -> dict[str, Any]:
 
 def _switch_honesty(claim: str) -> str:
     if claim == "live_switch_round_trip":
-        return "A live Switch connection completed registration and a message post."
+        return "A live Switch connection accepted an outbound post and received an inbound message."
+    if claim == "live_switch_outbound":
+        return "A live Switch connection accepted an outbound post; no inbound message has been verified on this connection."
+    if claim == "live_switch_inbound":
+        return "A live Switch connection received an inbound message; no outbound post has been verified on this connection."
     if claim == "live_switch_connected":
-        return "The Switch socket is connected. A message round-trip has not completed yet."
+        return "The Switch socket is connected. No inbound or outbound message has been verified on this connection."
     return "Switch is not connected. Local simulation is not a Switch connection."
 
 
@@ -420,30 +506,6 @@ async def switch_status() -> dict[str, Any]:
     return health
 
 
-class ManualPingRequest(BaseModel):
-    room_id: str
-
-
-@app.post("/api/switch/test-ping")
-async def trigger_test_ping(req: ManualPingRequest) -> dict[str, Any]:
-    """Dispatch the verified Stage 1 ping response when the agent is registered."""
-    if not switch_adapter.agent_id:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Switch agent is not registered or connected.",
-        )
-    try:
-        event_id = await switch_adapter.send_message(req.room_id, STAGE_1_VERIFICATION_RESPONSE)
-        return {
-            "status": "dispatched",
-            "room_id": req.room_id,
-            "event_id": event_id,
-            "real_switch_proven": bool(switch_adapter.round_trip_completed and _switch_is_live()),
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)[:300]) from exc
-
-
 class SimulateMessage(BaseModel):
     room_id: str = "room-sim"
     body: str = Field(min_length=1, max_length=4000)
@@ -463,7 +525,7 @@ async def simulate_switch_message(body: SimulateMessage) -> dict[str, Any]:
                 "sender": body.sender,
                 "sender_name": body.sender_name,
                 "sender_kind": "user",
-                "message_id": None,
+                "message_id": f"sim-{uuid.uuid4()}",
             },
         },
         channel="switch_simulation",

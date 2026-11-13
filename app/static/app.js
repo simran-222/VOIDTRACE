@@ -9,6 +9,7 @@ const state = {
   loading: false,
   busy: "",
   approver: sessionStorage.getItem("voidtrace.approver") || "Avery Chen",
+  apiToken: sessionStorage.getItem("voidtrace.apiToken") || "",
   query: "",
   statusFilter: "",
   riskFilter: "",
@@ -22,6 +23,8 @@ const state = {
   restoreFocus: false,
   confirm: "",
 };
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 const NAV = [
   ["overview", "Overview"],
@@ -81,10 +84,20 @@ function go(path) {
   else location.hash = next;
 }
 
-async function fetchJson(url, options) {
-  const response = await fetch(url, options);
+async function fetchJson(url, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (MUTATING_METHODS.has(method) && state.apiToken) {
+    headers.set("Authorization", `Bearer ${state.apiToken}`);
+  }
+  const response = await fetch(url, { ...options, headers });
   let body = null;
   try { body = await response.json(); } catch (_error) { body = null; }
+  if (response.status === 401) {
+    state.apiToken = "";
+    sessionStorage.removeItem("voidtrace.apiToken");
+    throw new Error("API token missing or invalid. Enter it in Settings.");
+  }
   if (!response.ok) {
     const detail = body && body.detail;
     const message = typeof detail === "string"
@@ -153,7 +166,9 @@ function updatedOf(item) {
 }
 
 function claimLabel(claim) {
-  if (claim === "live_switch_round_trip") return "Live round-trip";
+  if (claim === "live_switch_round_trip") return "Both directions verified";
+  if (claim === "live_switch_outbound") return "Live outbound delivery";
+  if (claim === "live_switch_inbound") return "Live inbound verified";
   if (claim === "live_switch_connected") return "Socket connected";
   return "Not connected";
 }
@@ -421,7 +436,7 @@ function dashboardPage() {
         h("div", { class: "plate" }, h("strong", { class: ledgerOk ? "" : "critical" }, overviewPhrase(health.status))),
         h("p", null, ledgerOk ? "Audit ledger verified." : "Audit ledger failed."),
         h("p", null, claimLabel(core.connection_claim)),
-        h("p", null, core.real_switch_proven ? "Live round-trip proven." : "Live Switch is not proven."),
+        h("p", null, core.real_switch_proven ? "Both Switch directions verified." : "Both Switch directions are not verified."),
         h("p", { class: "situation" }, situation)
       ),
       rest.length
@@ -772,7 +787,8 @@ function switchPage() {
     h("h1", null, claimLabel(core.connection_claim)),
     h("p", { class: "lede" }, core.honesty),
     h("div", { class: "meta-line" },
-      h("span", null, core.real_switch_proven ? "Live connection proven" : "Live connection not proven"),
+      h("span", null, core.outbound_verified ? "Outbound delivery proven" : "Outbound delivery not proven"),
+      h("span", null, core.inbound_verified ? "Inbound message verified" : "Inbound message not verified"),
       h("span", null, core.registration_token_configured ? "Registration token is configured and hidden" : "Registration token is not configured"),
       h("span", { class: "mono" }, core.agent_id ? `Agent ${core.agent_id}` : "Agent not registered"),
       h("span", { class: "mono" }, `Received ${core.messages_received} · sent ${core.messages_sent}`)
@@ -872,6 +888,23 @@ function settingsPage() {
         oninput: (event) => {
           state.approver = event.target.value;
           sessionStorage.setItem("voidtrace.approver", state.approver);
+          remember(event);
+        },
+      }))
+    ),
+    h("section", { class: "section" },
+      h("h2", null, "API token"),
+      h("p", { class: "muted" }, "Required for changes when the server sets VOIDTRACE_API_TOKEN. Stored in this browser session only and never shown in plain text."),
+      field("Token", h("input", {
+        id: "api-token",
+        type: "password",
+        autocomplete: "off",
+        spellcheck: "false",
+        value: state.apiToken,
+        oninput: (event) => {
+          state.apiToken = event.target.value;
+          if (state.apiToken) sessionStorage.setItem("voidtrace.apiToken", state.apiToken);
+          else sessionStorage.removeItem("voidtrace.apiToken");
           remember(event);
         },
       }))

@@ -324,6 +324,100 @@ class TestSwitchAdapterAsync(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(sent), 1, "A repeated message id must be answered once.")
 
+    async def test_received_counter_counts_only_accepted_messages(self) -> None:
+        self.adapter.agent_id = "agent-mock-test"
+        self.adapter.api_key = "key-mock-test"
+        await self._make_sent_list()
+
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-count",
+            "payload": {
+                "body": "@voidtrace ping",
+                "sender": "agent-self-mxid",
+                "sender_name": settings.AGENT_NAME,
+                "sender_kind": "agent",
+                "message_id": "msg-count-own",
+            },
+        })
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-count",
+            "payload": {
+                "body": "@voidtrace ping",
+                "sender": "@switch-admin:localhost",
+                "sender_name": "Switch",
+                "sender_kind": "platform",
+                "message_id": "msg-count-platform",
+            },
+        })
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-count",
+            "payload": {
+                "body": "@voidtrace ping",
+                "sender": "",
+                "sender_name": "Unknown",
+                "message_id": "msg-count-unknown",
+            },
+        })
+        for _ in range(2):
+            await self.adapter.handle_incoming_event({
+                "type": "message",
+                "room_id": "room-count",
+                "payload": {
+                    "body": "hello",
+                    "sender": "user-bob",
+                    "sender_name": "Bob",
+                    "sender_kind": "user",
+                    "message_id": "msg-count-duplicate",
+                },
+            })
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-count",
+            "payload": {
+                "body": "hello again",
+                "sender": "user-bob",
+                "sender_name": "Bob",
+                "sender_kind": "user",
+                "message_id": "msg-count-accepted",
+            },
+        })
+
+        self.assertEqual(self.adapter.messages_received, 2)
+        self.assertIsNotNone(self.adapter.last_inbound_at)
+
+    async def test_rejected_messages_do_not_verify_inbound(self) -> None:
+        self.adapter.agent_id = "agent-mock-test"
+        self.adapter.api_key = "key-mock-test"
+        await self._make_sent_list()
+
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-rejected",
+            "payload": {
+                "body": "@voidtrace ping",
+                "sender": "@switch-admin:localhost",
+                "sender_name": "Switch",
+                "sender_kind": "platform",
+                "message_id": "msg-rejected-platform",
+            },
+        })
+        await self.adapter.handle_incoming_event({
+            "type": "message",
+            "room_id": "room-rejected",
+            "payload": {
+                "body": "@voidtrace ping",
+                "sender": "",
+                "sender_name": "Unknown",
+                "message_id": "msg-rejected-unknown",
+            },
+        })
+
+        self.assertEqual(self.adapter.messages_received, 0)
+        self.assertIsNone(self.adapter.last_inbound_at)
+
     async def test_agent_ping_loop_is_rate_limited(self) -> None:
         self.adapter.agent_id = "agent-mock-test"
         self.adapter.api_key = "key-mock-test"

@@ -47,7 +47,8 @@ class TestMockSwitchRoundTrip(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(event_id.startswith("evt-"))
         self.assertEqual(len(self.mock.posted_messages), 1)
         self.assertEqual(self.mock.posted_messages[0]["room_id"], "room-security")
-        self.assertTrue(adapter.round_trip_completed)
+        self.assertIsNotNone(adapter.last_outbound_at)
+        self.assertIsNone(adapter.last_inbound_at)
         self.assertIn("switch.mock", adapter.server_url)
 
     async def test_redacts_registration_token(self) -> None:

@@ -13,12 +13,20 @@ logs/
 # SQLite runtime files
 *.db-shm
 *.db-wal
+*.db-journal
+*.db.gz
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite-journal
 
 # Local backups
+backups/
 frontend_backup_*/
 incident_addition_backup/
+
+# Local-only secrets and generated data
+relay-secret.txt
+demo_data/upload.txt
 
 # Python test/cache files
 .pytest_cache/
